@@ -78,16 +78,13 @@ The missing values problem not only applies `sii`, this is also a problem we hav
 
 ![Columns Missing Values Count](images/Columns_Missing_Values_Count.png)
 
-We [mentioned](#target-variable-sii) that there is a certain mapping between `sii` - our target variable - and `PCIAT-PCIAT_Total` field. We used this to our advantage by assuming that `PCIAT-PCIAT_Total` can somewhat **substitute** `sii`, meaning that instead of predicting `sii`, we predict `PCIAT-PCIAT_Total`.
+We [mentioned](#target-variable-sii) that there is a certain mapping between `sii` - our target variable - and `PCIAT-PCIAT_Total` field. We used this to our advantage by assuming that `PCIAT-PCIAT_Total` can somewhat **substitute** `sii`, meaning that instead of predicting `sii`, we predict `PCIAT-PCIAT_Total`. This is what we do in our [Gradient Boosting Regression model](#regression-with-gradient-boosting).
 
 Here's a partial correlation heatmap between `PCIAT-PCIAT_Total` and the rest of the features, the full heatmap is presented in the Jupyter Notebook file:
 
 ![PCIAT Total correlation heatmap](images/PCIAT_Total_Correlation_Heatmap.png)
 
 ### Data Preparation/Preprocessing
-
-> [!NOTE]
-> In this section, we treat the data as two types: Numerical (`float64`, `int64`) and Categorical (`object`).
 
 #### Import Data
 
@@ -96,6 +93,9 @@ The tabular data, stored in `.csv` files are simply read using `pandas` library.
 #### Data Cleaning
 
 Our first processing step is dealing with missing values. Firstly, rows with missing `sii` values are dropped, we cannot use these rows for training.
+
+> [!NOTE]
+> The below steps of imputing missing values are for our [Random Forest model](#random-forest). Our [Gradient Boosting Regression model](#regression-with-gradient-boosting) does not require imputation as it can handle missing values.
 
 For numerical features, we fill missing values with the **mean** of the column. For categorical features, we fill missing values with the **mode** (most frequent value) of the column. Both of these are done using `SimpleImputer` from `sklearn.impute`.
 
@@ -128,17 +128,58 @@ where $X$ is the original feature, $\mu$ is the mean of the feature, and $\sigma
 
 #### Feature Selection
 
+> [!NOTE]
+> This step is for our [Regression model](#regression-with-gradient-boosting). Our [Random Forest model](#random-forest) did not include a feature selection step during data processing.
+
 With the data of the correlation between the target variable (in our case we use `PCIAT-PCIAT_Total`) and the features in the training dataset, and the result is the correlation heatmap demonstrated in the [Features](#features) section, we can select the most relevant features for training the model. We selected features manually, with criteria being the correlation coefficient between the feature and the target variable must be greater than $0.1$.
 
 We also dropped all columns with the number of missing values greater than $50\%$.
 
 ## Models and Performance
 
-### Model
+### Data Splitting
 
-### Training and Evaluation
+We split the training data into separate training and validation (testing) sets using a $80/20$ split ratio, and is done using `train_test_split` from `sklearn.model_selection`. The validation set is used to evaluate the model's performance during training and tuning hyperparameters, and the split is stratified to ensure that the distribution of the target variable is similar in both sets.
 
-### Results
+Splitting the data into training and validation sets allows us to assess the model's performance on unseen data and prevent overfitting, improving the model's generalization to new data.
+
+### Models
+
+#### Random Forest
+
+![Random Forest Algorithm](images/Random_Forest.jpg)
+
+Random Forest is an ensemble learning method that constructs a multitude of decision trees during training and outputs the mode of the classes (classification) or the mean prediction (regression) of the individual trees. We use it for its relative theoretical simplicity and ease of use, and it is known for its robustness and high performance on structured/tabular data.
+
+For this model, we are performing a multi-class classification task, predicting the **nominal** categorical variable `sii`. A drawback of treating `sii` as a nominal categorical variable is that it ignores the ordinal relationship between class labels, which in this case, the order of the categories (None, Mild, Moderate, Severe) has a specific meaning and reflects increasing severity.
+
+We use the `RandomForestClassifier` from the `sklearn.ensemble` library to train the model.
+
+#### Regression (with Gradient Boosting)
+
+![Gradient Boosting Algorithm](images/Gradient_Boosting.jpg)
+
+Gradient Boosting is an ensemble learning method that builds a series of decision trees sequentially during training, where each tree corrects the errors of its predecessor by minimizing the loss function using gradient descent. Regression with Gradient Boosting is a variant of Gradient Boosting that is used for regression tasks, where the target variable is continuous. We use Gradient Boosting Regression for its high effectiveness and performance on structured/tabular data and its ability to handle missing values without the need for imputation.
+
+For this model, we are performing a regression task, predicting the **semi-continuous** target variable `PCIAT-PCIAT_Total`. A semi-continuous variable is a variable that can take on a large number of values, but only a few of these values are actually observed in the data. In this case, `PCIAT-PCIAT_Total` is a continuous variable, but it is derived from the `PCIAT-PCIAT_Total` field, which is an ordinal categorical variable.
+
+We use the `XGBRegressor` from the `xgboost` library to predict the semi-continuous target variable `PCIAT-PCIAT_Total`. We chose `xgboost` because it is a mature implementation of the Gradient Boosting algorithm.
+
+### Hyperparameter Tuning
+
+Hyperparameter tuning is the process of selecting the optimal hyperparameters for a machine learning model to improve its performance. Hyperparameters are parameters that are set before the learning process begins, and they control the learning process itself. We observed that the model's performance can be significantly improved by tuning hyperparameters.
+
+![Grid Search for Hyperparameter Tuning](images/Grid_Search.jpg)
+
+We used the traditional method of Grid Search to tune hyperparameters, utilizing `GridSearchCV` from `sklearn.model_selection` on our models. This method performs an exhaustive search over a specified parameter grid, and the library implementation specifically uses cross-validation to evaluate the model's performance for each combination of hyperparameters.
+
+### Evaluation
+
+After training the model on the training set, we evaluate the model's performance on the validation set using metrics such as Accuracy, Precision, Recall, F1 Score, and the Quadratic Weighted Kappa (QWK) score - the competition's primary evaluation metric.
+
+For the QWK score, in our earlier versions, we include in the notebook a `quadratic_weighted_kappa` function that calculates the QWK score using `cohen_kappa_score` from `sklearn.metrics`. However, this calculation proved to be inaccurate compared to Kaggle's Private Score calculation, so we ditched this function.
+
+## Final Results
 
 The final predictions are saved in a CSV file in the required submission format:
 
